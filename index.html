@@ -333,7 +333,12 @@
         doc.text(`TOTAL A PAGAR: S/ ${total}`, 20, y);
         y += 10;
 
-        // 🟩 Aquí se usa tu QR en formato PNG
+        // 🟩 Texto "Nuestra Carta" encima del QR
+        doc.setFontSize(11);
+        doc.text("Nuestra Carta", 30, y); // Texto centrado (ajusta X si lo quieres más al centro)
+        y += 5;
+
+        // 🟩 Cargar y mostrar el QR
         const qr = new Image();
         qr.src = "Qr.png"; // Tu archivo QR.png
         await new Promise((r) => (qr.onload = r));
