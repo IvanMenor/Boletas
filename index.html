@@ -54,19 +54,6 @@
         padding-bottom: 10px;
       }
 
-      .header h1 {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #d32f2f;
-        margin-bottom: 5px;
-      }
-
-      .header p {
-        font-size: 0.9rem;
-        color: #333;
-        margin: 2px 0;
-      }
-
       .section-title {
         color: #d32f2f;
         font-weight: 600;
@@ -74,55 +61,17 @@
         margin-bottom: 10px;
       }
 
-      .table th {
-        background-color: #d32f2f;
-        color: white;
-        font-size: 0.85rem;
-      }
-
-      .table td input {
-        font-size: 0.85rem;
-      }
-
       .total {
-        text-align: right;
+        text-align: center;
         font-weight: 600;
         font-size: 1.1rem;
         color: #007e33;
         margin-top: 10px;
         margin-bottom: 15px;
       }
-
-      .btn-primary {
-        background-color: #d32f2f;
-        border: none;
-      }
-
-      .btn-primary:hover {
-        background-color: #a52727;
-      }
-
-      .footer {
-        text-align: center;
-        font-size: 0.85rem;
-        color: #333;
-        margin-top: 15px;
-      }
-
-      .footer i {
-        color: #d32f2f;
-      }
-
-      .qr-container {
-        text-align: center;
-        margin-top: 10px;
-      }
-
-      canvas {
-        display: inline-block;
-      }
     </style>
   </head>
+
   <body>
     <div class="boleta-container">
       <div class="logo">
@@ -219,8 +168,27 @@
         <i class="fa fa-plus"></i> Agregar Producto
       </button>
 
+      <!-- CAMPO DE DESCUENTO -->
+      <div class="mb-3">
+        <label class="form-label fw-bold">Descuento (%)</label>
+        <input
+          type="number"
+          id="descuento"
+          class="form-control"
+          value="0"
+          min="0"
+          max="100"
+          onchange="actualizarTotales()"
+        />
+      </div>
+
       <div class="total">
-        Total a Pagar: S/ <span id="totalGeneral">25.00</span>
+        Total sin descuento: S/ <span id="totalGeneral">25.00</span><br />
+        Descuento aplicado: <span id="descuentoTexto">0%</span><br />
+        <strong
+          >Total con descuento: S/
+          <span id="totalConDescuento">25.00</span></strong
+        >
       </div>
 
       <div class="text-center">
@@ -234,15 +202,16 @@
       function agregarFila() {
         const tabla = document
           .getElementById("tablaPedidos")
-          .getElementsByTagName("tbody")[0];
+          .querySelector("tbody");
         const fila = tabla.insertRow();
+
         fila.innerHTML = `
-        <td><input type="text" class="form-control" placeholder="Nombre del producto"></td>
-        <td><input type="number" class="form-control" value="1" min="1" onchange="actualizarTotales()"></td>
-        <td><input type="number" class="form-control" value="0" min="0" onchange="actualizarTotales()"></td>
-        <td class="item-total">0.00</td>
-        <td><button class="btn btn-danger btn-sm" onclick="eliminarFila(this)"><i class="fa fa-trash"></i></button></td>
-      `;
+          <td><input type="text" class="form-control" placeholder="Nombre del producto"></td>
+          <td><input type="number" class="form-control" value="1" min="1" onchange="actualizarTotales()"></td>
+          <td><input type="number" class="form-control" value="0" min="0" onchange="actualizarTotales()"></td>
+          <td class="item-total">0.00</td>
+          <td><button class="btn btn-danger btn-sm" onclick="eliminarFila(this)"><i class="fa fa-trash"></i></button></td>
+        `;
       }
 
       function eliminarFila(btn) {
@@ -252,22 +221,35 @@
 
       function actualizarTotales() {
         let totalGeneral = 0;
+
         document.querySelectorAll("#tablaPedidos tbody tr").forEach((fila) => {
           const cantidad =
             parseFloat(fila.cells[1].querySelector("input").value) || 0;
           const precio =
             parseFloat(fila.cells[2].querySelector("input").value) || 0;
           const total = cantidad * precio;
+
           fila.querySelector(".item-total").textContent = total.toFixed(2);
           totalGeneral += total;
         });
+
         document.getElementById("totalGeneral").textContent =
           totalGeneral.toFixed(2);
+
+        // aplicar descuento
+        const descuento =
+          parseFloat(document.getElementById("descuento").value) || 0;
+        const totalConDescuento =
+          totalGeneral - (totalGeneral * descuento) / 100;
+
+        document.getElementById("totalConDescuento").textContent =
+          totalConDescuento.toFixed(2);
+        document.getElementById("descuentoTexto").textContent = descuento + "%";
       }
 
       async function generarPDF() {
         const { jsPDF } = window.jspdf;
-        const doc = new jsPDF({ unit: "mm", format: [80, 250] }); // formato tipo boleta
+        const doc = new jsPDF({ unit: "mm", format: [80, 250] });
 
         const nombre =
           document.getElementById("nombreCliente").value || "Cliente";
@@ -275,84 +257,117 @@
         const fecha =
           document.getElementById("fechaBoleta").value ||
           new Date().toLocaleDateString();
-        const total = document.getElementById("totalGeneral").textContent;
 
-        // Cargar logo
+        const total = document.getElementById("totalGeneral").textContent;
+        const descuento = document.getElementById("descuento").value;
+        const totalConDescuento =
+          document.getElementById("totalConDescuento").textContent;
+
+        // calcular dimensiones para centrar contenido
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const contentWidth = 65; // ancho aproximado usado anteriormente (75 - 10)
+        const leftX = (pageWidth - contentWidth) / 2;
+        const rightX = leftX + contentWidth;
+
+        // cargar logo
         const logo = new Image();
         logo.src = "logo.png";
         await new Promise((r) => (logo.onload = r));
 
         let y = 10;
-        doc.addImage(logo, "PNG", 20, y, 40, 40);
-        y += 40;
+        const logoWidth = 40;
+        const logoX = (pageWidth - logoWidth) / 2;
+        doc.addImage(logo, "PNG", logoX, y, logoWidth, 40);
+        y += 45;
 
         doc.setFontSize(11);
-        doc.text("EL NORTE LIMEÑO RESTAURANTE", 10, y);
+        doc.text("EL NORTE LIMEÑO RESTAURANTE", pageWidth / 2, y, {
+          align: "center",
+        });
         y += 5;
         doc.setFontSize(9);
-        doc.text("RUC: 10480996645", 10, y);
+        doc.text("RUC: 10480996645", pageWidth / 2, y, { align: "center" });
         y += 4;
-        doc.text("Calle A Mz F Lt 46 - Urb. Arizona, SMP", 10, y);
+        doc.text("Calle A Mz F Lt 46 - Urb. Arizona, SMP", pageWidth / 2, y, {
+          align: "center",
+        });
         y += 4;
-        doc.text("Tel: 960701779", 10, y);
+        doc.text("Tel: 960701779", pageWidth / 2, y, { align: "center" });
         y += 8;
 
-        doc.text(`Fecha: ${fecha}`, 10, y);
+        doc.text(`Fecha: ${fecha}`, pageWidth / 2, y, { align: "center" });
         y += 5;
-        doc.text(`Cliente: ${nombre}`, 10, y);
+        doc.text(`Cliente: ${nombre}`, pageWidth / 2, y, { align: "center" });
         y += 5;
-        doc.text(`Celular: ${celular}`, 10, y);
+        doc.text(`Celular: ${celular}`, pageWidth / 2, y, { align: "center" });
         y += 8;
 
         doc.setFontSize(10);
-        doc.text("Producto", 10, y);
-        doc.text("Cant", 40, y);
-        doc.text("Precio", 55, y);
-        doc.text("Total", 70, y);
+        doc.text("Producto", leftX, y);
+        doc.text("Cant", leftX + 30, y);
+        doc.text("Precio", leftX + 45, y);
+        doc.text("Total", rightX, y, { align: "right" });
         y += 3;
-        doc.line(10, y, 75, y);
+        doc.line(leftX, y, rightX, y);
         y += 5;
 
         document.querySelectorAll("#tablaPedidos tbody tr").forEach((fila) => {
-          const producto = fila.cells[0].querySelector("input").value || "-";
-          const cantidad = fila.cells[1].querySelector("input").value;
+          const prod = fila.cells[0].querySelector("input").value || "-";
+          const cant = fila.cells[1].querySelector("input").value;
           const precio = fila.cells[2].querySelector("input").value;
           const totalItem = fila.cells[3].textContent;
 
-          doc.text(producto.substring(0, 20), 10, y);
-          doc.text(String(cantidad), 43, y);
-          doc.text(String(precio), 57, y, { align: "right" });
-          doc.text(String(totalItem), 75, y, { align: "right" });
+          doc.text(prod.substring(0, 20), leftX, y);
+          doc.text(String(cant), leftX + 33, y);
+          doc.text(String(precio), leftX + 47, y);
+          doc.text(String(totalItem), rightX, y, { align: "right" });
           y += 5;
         });
 
         y += 5;
-        doc.line(10, y, 75, y);
+        doc.line(leftX, y, rightX, y);
         y += 8;
-        doc.setFontSize(11);
-        doc.text(`TOTAL A PAGAR: S/ ${total}`, 20, y);
-        y += 10;
 
-        // 🟩 Texto "Nuestra Carta" encima del QR
-        doc.setFontSize(11);
-        doc.text("Nuestra Carta", 30, y); // Texto centrado (ajusta X si lo quieres más al centro)
+        doc.setFontSize(10);
+        doc.text(`TOTAL: S/ ${total}`, pageWidth / 2, y, { align: "center" });
+        y += 5;
+        doc.text(`DESCUENTO: ${descuento}%`, pageWidth / 2, y, {
+          align: "center",
+        });
         y += 5;
 
-        // 🟩 Cargar y mostrar el QR
+        doc.setFontSize(12);
+        doc.text(`TOTAL A PAGAR: S/ ${totalConDescuento}`, pageWidth / 2, y, {
+          align: "center",
+        });
+        y += 10;
+
+        // Texto QR
+        doc.setFontSize(11);
+        doc.text("Nuestra Carta", pageWidth / 2, y, { align: "center" });
+        y += 5;
+
+        // QR
         const qr = new Image();
-        qr.src = "Qr.png"; // Tu archivo QR.png
+        qr.src = "Qr.png";
         await new Promise((r) => (qr.onload = r));
-        doc.addImage(qr, "PNG", 20, y, 40, 40); // ancho 40mm
+        const qrWidth = 40;
+        const qrX = (pageWidth - qrWidth) / 2;
+        doc.addImage(qr, "PNG", qrX, y, qrWidth, 40);
         y += 50;
 
         doc.setFontSize(9);
-        doc.text("¡Gracias por su visita!", 25, y);
-        y += 6;
-        doc.text("Síguenos en:", 30, y);
+        doc.text("¡Gracias por su visita!", pageWidth / 2, y, {
+          align: "center",
+        });
         y += 5;
-        doc.text("Instagram: @elnortelimenorestaurante", 10, y);
+        doc.text("Instagram: @elnortelimenorestaurante", pageWidth / 2, y, {
+          align: "center",
+        });
         y += 5;
-        doc.text("TikTok: @elnortelimenorestaurante", 10, y);
+        doc.text("TikTok: @elnortelimenorestaurante", pageWidth / 2, y, {
+          align: "center",
+        });
 
         doc.save(`Boleta_${nombre}.pdf`);
       }
